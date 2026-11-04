@@ -1,0 +1,28 @@
+# Render Blueprint: one free web service + one free Postgres database.
+# Deploy: https://dashboard.render.com/blueprint/new?repo=https://github.com/Nexuskiller369/gatekeeper
+services:
+  - type: web
+    name: gatekeeper
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npx prisma generate
+    # Apply migrations and reload the demo data on every start, then run the server.
+    startCommand: npx prisma migrate deploy && npm run seed && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gatekeeper-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+
+databases:
+  - name: gatekeeper-db
+    plan: free
+    databaseName: gatekeeper
+    user: gatekeeper
