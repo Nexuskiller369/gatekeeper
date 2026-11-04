@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gatekeeper Design Document</title>
+<style>
+  @page { size: A4; margin: 13mm 14mm 14mm 14mm; }
+  :root {
+    --ink: #1b2430;
+    --muted: #5b6676;
+    --line: #dde3ea;
+    --soft: #f3f6f9;
+    --accent: #0f5c8c;
+    --accent-soft: #e6f0f7;
+    --allow: #1d7a46;
+    --allow-soft: #e5f4ea;
+    --deny: #a8431a;
+    --deny-soft: #fbece4;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font: 9.1pt/1.42 "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  }
+  code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 0.86em;
+         background: var(--soft); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+  b, strong { font-weight: 600; }
+  p { margin: 0 0 5px; }
+
+  /* ---------- header ---------- */
+  .masthead { border-bottom: 2.5px solid var(--accent); padding-bottom: 7px; margin-bottom: 9px;
+              display: flex; justify-content: space-between; align-items: flex-end; }
+  .masthead .kicker { font-size: 7.6pt; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  .masthead h1 { font-size: 21pt; line-height: 1.1; margin: 2px 0 1px; letter-spacing: -.01em; }
+  .masthead .sub { color: var(--muted); font-size: 9.6pt; }
+  .masthead .meta { text-align: right; font-size: 7.8pt; color: var(--muted); line-height: 1.5; }
+
+  .lede { display: grid; grid-template-columns: 1.35fr 1fr; gap: 10px; margin-bottom: 9px; }
+  .problem { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 7px 10px; border-radius: 0 4px 4px 0; }
+  .problem p { margin: 0; }
+  .goals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .goal { border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; }
+  .goal .n { font-size: 7.2pt; color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .goal div:last-child { font-size: 8.2pt; line-height: 1.3; }
+
+  /* ---------- sections ---------- */
+  h2 { font-size: 11.6pt; margin: 11px 0 6px; padding-bottom: 3px; border-bottom: 1px solid var(--line);
+       display: flex; align-items: baseline; gap: 7px; break-after: avoid; }
+  h2 .num { color: #fff; background: var(--accent); font-size: 8pt; border-radius: 3px; padding: 1px 6px; }
+  h3 { font-size: 9.4pt; margin: 8px 0 4px; color: var(--accent); break-after: avoid; }
+
+  /* ---------- model ---------- */
+  .model { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 6px; }
+  .card { border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; background: #fff; break-inside: avoid; }
+  .card .t { font-weight: 700; font-size: 8.9pt; margin-bottom: 2px; }
+  .card .t small { font-weight: 400; color: var(--muted); font-size: 7.6pt; margin-left: 4px; }
+  .card p { font-size: 8.3pt; line-height: 1.36; margin: 0; }
+  .card.key { border-color: var(--accent); background: var(--accent-soft); }
+  .formula { font-family: "Cascadia Mono", Consolas, monospace; font-size: 7.9pt; background: #fff;
+             border: 1px dashed var(--accent); border-radius: 3px; padding: 2px 5px; margin: 3px 0; display: inline-block; }
+
+  .flow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; font-size: 7.9pt; }
+  .flow .st { border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; padding: 1px 8px; font-weight: 600; background: #fff; }
+  .flow .st.lock { background: var(--accent); color: #fff; }
+  .flow .ar { color: var(--muted); }
+  .flow .side { margin-left: 8px; color: var(--muted); }
+
+  .engine { border: 1px solid var(--line); border-radius: 5px; padding: 7px 8px 6px; background: var(--soft); margin: 6px 0 4px; break-inside: avoid; }
+  .engine .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .engine .head b { font-size: 9pt; }
+  .engine .head span { font-size: 7.8pt; color: var(--muted); }
+  .steps { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; }
+  .step { background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 3px 3px 4px; text-align: center; font-size: 7.3pt; line-height: 1.2; position: relative; }
+  .step i { display: block; font-style: normal; font-weight: 700; color: var(--accent); font-size: 7.8pt; }
+  .outcome { display: flex; gap: 6px; margin-top: 5px; font-size: 7.9pt; align-items: center; flex-wrap: wrap; }
+  .pill { border-radius: 10px; padding: 1px 8px; font-weight: 700; font-size: 7.6pt; }
+  .pill.allow { background: var(--allow-soft); color: var(--allow); }
+  .pill.deny { background: var(--deny-soft); color: var(--deny); }
+
+  .logs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .logs .card p { font-size: 8pt; }
+
+  /* ---------- decisions table ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 8.15pt; line-height: 1.33; }
+  th { text-align: left; font-size: 7.4pt; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+       border-bottom: 1.5px solid var(--ink); padding: 3px 6px; }
+  td { border-bottom: 1px solid var(--line); padding: 4px 6px; vertical-align: top; }
+  td:first-child { font-weight: 600; width: 25%; }
+  td:last-child { color: var(--muted); width: 30%; }
+  tr { break-inside: avoid; }
+
+  .perf { display: grid; grid-template-columns: 1.6fr repeat(4, 1fr); gap: 6px; margin-top: 7px; break-inside: avoid; }
+  .perf .explain { font-size: 8.1pt; line-height: 1.35; }
+  .metric { border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; text-align: center; }
+  .metric .v { font-size: 12pt; font-weight: 700; color: var(--accent); line-height: 1.1; }
+  .metric .l { font-size: 7.2pt; color: var(--muted); line-height: 1.2; }
+
+  /* ---------- Q&A ---------- */
+  .qa { columns: 2; column-gap: 16px; column-rule: 1px solid var(--line); }
+  .q { break-inside: avoid; margin-bottom: 8px; }
+  .q .qt { display: flex; gap: 6px; align-items: baseline; font-weight: 700; font-size: 8.9pt; line-height: 1.3; margin-bottom: 2px; }
+  .q .qt .badge { flex: none; background: var(--accent); color: #fff; font-size: 7.3pt; border-radius: 3px;
+                  min-width: 19px; text-align: center; padding: 1px 3px; }
+  .q.added .qt .badge { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  .q .a { font-size: 8.45pt; line-height: 1.4; }
+  .q .a p { margin: 0 0 3px; }
+  .q .verdict { font-weight: 700; color: var(--ink); }
+  .quote { border-left: 2px solid var(--line); padding-left: 6px; color: var(--muted); font-style: italic; margin: 3px 0; }
+
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; break-inside: avoid; }
+  .box { border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; }
+  .box h4 { margin: 0 0 4px; font-size: 8.8pt; }
+  .box ul { margin: 0; padding-left: 14px; font-size: 8.3pt; line-height: 1.38; }
+  .box li { margin-bottom: 1px; }
+  .box.cut { background: var(--soft); }
+
+  .foot { margin-top: 9px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 7.5pt; color: var(--muted);
+          display: flex; justify-content: space-between; }
+  .pb { break-before: page; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div>
+    <div class="kicker">Technical assessment · Design document</div>
+    <h1>Gatekeeper</h1>
+    <div class="sub">Access control for NFPL customs jobs: who may do what, on which job, and why</div>
+  </div>
+  <div class="meta">
+    Nagarkot Forwarders Pvt. Ltd.<br>
+    November 2026<br>
+    Node.js · TypeScript · Express · Prisma · PostgreSQL
+  </div>
+</header>
+
+<section class="lede">
+  <div class="problem">
+    <p><b>The problem.</b> A filed shipment was altered and nobody could say <b>who had been allowed to, or why</b>.
+    The design treats that as three requirements, and keeps the system easy to run day to day while meeting them.</p>
+  </div>
+  <div class="goals">
+    <div class="goal"><div class="n">Refuse</div><div>what shouldn't happen, by default</div></div>
+    <div class="goal"><div class="n">Explain</div><div>every yes and every no, in a sentence</div></div>
+    <div class="goal"><div class="n">Remember</div><div>enough to answer questions about the past</div></div>
+  </div>
+</section>
+
+<!-- ================= 1. MODEL ================= -->
+<h2><span class="num">1</span>The model</h2>
+
+<div class="model">
+  <div class="card">
+    <div class="t">Job <small>the thing being protected</small></div>
+    <p>Four <b>access attributes</b>: client, branch, direction (IMPORT/EXPORT), mode (AIR/FCL/LCL). They are
+      fixed after creation, because they decide who may touch the job. It also has a stage and a version number.</p>
+    <div class="flow">
+      <span class="st">CONFIRMED</span><span class="ar">→</span><span class="st">PREPARED</span><span class="ar">→</span>
+      <span class="st">CHECKED</span><span class="ar">→</span><span class="st lock">FILED 🔒</span>
+    </div>
+    <div class="flow"><span class="side" style="margin-left:0">plus CANCELLED and REOPENED</span></div>
+  </div>
+  <div class="card key">
+    <div class="t">AccessGrant <small>the core idea</small></div>
+    <span class="formula">user × role × scope × [from, until)</span>
+    <p>A <b>scope</b> is any mix of client, branch, direction and mode, where an empty field means “any”. A person holds as many
+      grants as they need. Grants are <b>never deleted</b>: a revoke records who, when and why, so the past stays answerable.</p>
+  </div>
+  <div class="card">
+    <div class="t">Role &amp; permission <small>stored as data</small></div>
+    <p>Permissions are fine-grained verbs (<code>job.check</code>, <code>job.cancel_filed</code>, <code>access.manage</code>, …).
+      A role is a named bundle stored as a row: MAKER, CHECKER, FILER, VIEWER, CLIENT_VIEWER, OPS_ADMIN,
+      ACCESS_ADMIN, SYSTEM_PARSER, SYSTEM_AUTOMATION.</p>
+  </div>
+  <div class="card">
+    <div class="t">Delegation <small>temporary cover</small></div>
+    <p>“A’s role R for scope S is exercised by B until T.” B acts in their own name, <b>on behalf of</b> A, and history records both.</p>
+  </div>
+  <div class="card">
+    <div class="t">Absence &amp; status</div>
+    <p>An <b>absence</b> blocks <i>work</i> (not viewing) for a period. Status <b>INACTIVE</b> blocks everything, including existing tokens.</p>
+  </div>
+  <div class="card">
+    <div class="t">Workflow rules <small>also data</small></div>
+    <p>Which stage each action may start from, which actions need a written reason, and separation-of-duties rules
+      (“you may not check a job you prepared”).</p>
+  </div>
+</div>
+
+<div class="engine">
+  <div class="head">
+    <b>The decision engine: <code>decide(context, action, job, history, at)</code></b>
+    <span>pure functions with no database access · stops at the first failed check · every check adds a line to the trace</span>
+  </div>
+  <div class="steps">
+    <div class="step"><i>1</i>identity &amp; active</div>
+    <div class="step"><i>2</i>known action</div>
+    <div class="step"><i>3</i>job exists</div>
+    <div class="step"><i>4</i>stage allows it<br>(filed lock)</div>
+    <div class="step"><i>5</i>not absent</div>
+    <div class="step"><i>6</i>client boundary</div>
+    <div class="step"><i>7</i>role has permission</div>
+    <div class="step"><i>8</i>grant or delegation scope covers the job</div>
+    <div class="step"><i>9</i>separation of duties</div>
+  </div>
+  <div class="outcome">
+    <span class="pill allow">ALLOW</span><span class="pill deny">DENY</span>
+    <span>plus a code (<code>SCOPE_MISMATCH</code>, <code>SOD_VIOLATION</code>…), a plain sentence, the full trace, and the exact grant or delegation that matched.
+      The <b>same function</b> powers enforcement, explanations, history replays, queues and routing, so there is only one copy of the rules.</span>
+  </div>
+</div>
+
+<div class="logs">
+  <div class="card"><div class="t">JobHistory <small>append-only</small></div>
+    <p>Every change: actor, on-behalf-of, the <b>grant or delegation that authorised it</b>, stage before and after, reason, field-level diff.</p></div>
+  <div class="card"><div class="t">AccessAuditLog <small>append-only</small></div>
+    <p>Every access change, <b>and every denied attempt</b> (for example an admin trying to grant themselves a role).</p></div>
+  <div class="card"><div class="t">AutomationLog <small>append-only</small></div>
+    <p>Everything the router and the overnight parser did, or failed to do, with the reason.</p></div>
+</div>
+
+<!-- ================= 2. DECISIONS ================= -->
+<div style="break-inside: avoid">
+<h2><span class="num">2</span>Key decisions and trade-offs</h2>
+
+<table>
+  <thead><tr><th>Decision</th><th>Why</th><th>Trade-off accepted</th></tr></thead>
+  <tbody>
+    <tr><td>Scoped grants (role × scope), not one role per user or roles like <code>CHECKER_ACME_BOM</code></td>
+        <td>Matches how NFPL works: people cover slices of the business. No role explosion.</td>
+        <td>More complex queries, solved by compiling scopes into SQL filters.</td></tr>
+    <tr><td>One pure engine used everywhere</td>
+        <td>Lists, queues, routing and explanations can’t drift from enforcement. Unit-tested without a database (33 tests).</td>
+        <td>Callers must load the facts first.</td></tr>
+    <tr><td>Token carries only the user id</td>
+        <td>Access is read from the DB on each request, so a revoke or deactivation applies on the next click, not when the token expires.</td>
+        <td>One small DB read per request; a short cache could come later.</td></tr>
+    <tr><td>Deny by default, fail closed</td>
+        <td>Unknown action, missing data or any exception becomes <code>DENY / INDETERMINATE</code>.</td>
+        <td>A bug causes a refusal, never a silent allow.</td></tr>
+    <tr><td>404 when you may not even see a job</td>
+        <td>Doesn’t reveal which jobs exist, especially to client users.</td>
+        <td>Callers can’t tell “missing” from “hidden”; admins use the explain API.</td></tr>
+    <tr><td>Optimistic concurrency (version column)</td>
+        <td>Two simultaneous “check” clicks: exactly one wins, the other gets 409. No locks held.</td>
+        <td>The loser must reload.</td></tr>
+    <tr><td>Synchronous routing after each change</td>
+        <td>Simple and testable; enough for 120 staff.</td>
+        <td>Under heavy load, move to an outbox + worker.</td></tr>
+    <tr><td>Privileged roles are bootstrap-only</td>
+        <td>Admins can’t create more admins through the API, not even for each other.</td>
+        <td>Adding an admin is a deliberate seed/migration step.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="perf">
+  <div class="explain"><b>Lists stay fast at 200,000 jobs.</b> Visibility isn’t checked job by job: a user’s grants compile into one SQL
+    <code>WHERE</code> (an OR of scopes, each an AND of the fixed attributes), and the database filters and paginates using composite indexes on
+    the job attributes, assignee and history. Measured once on a laptop with 500 users and 200,008 jobs:</div>
+  <div class="metric"><div class="v">15–35 ms</div><div class="l">job list page</div></div>
+  <div class="metric"><div class="v">16–62 ms</div><div class="l">jobs waiting for me</div></div>
+  <div class="metric"><div class="v">8 ms</div><div class="l">job history</div></div>
+  <div class="metric"><div class="v">44 ms</div><div class="l">who-could-act, all 500 users</div></div>
+</div>
+
+<!-- ================= 3. ANSWERS ================= -->
+<h2><span class="num">3</span>Answers to the questions</h2>
+
+<div class="qa">
+
+  <div class="q"><div class="qt"><span class="badge">1</span>Should everyone see everything?</div>
+    <div class="a"><span class="verdict">No.</span> Viewing is a permission like any other (<code>job.view</code>), scoped the same way:
+      a checker for ACME/BOM sees ACME/BOM jobs. <b>Seeing is wider than acting</b>: a MAKER for all clients sees everything but can
+      only prepare, and a VIEWER sees but can’t act. Client users are also clamped to their own company whatever their grant says,
+      and their history view shows “NFPL” instead of staff names. Jobs you can’t see return 404, not 403.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">2</span>Maker everywhere, Checker for a few? Checker for one client, branch, imports only?</div>
+    <div class="a">Several grants per person, each with its own scope.
+      <b>Sarah:</b> <code>MAKER (any)</code> + <code>CHECKER (ACME)</code> + <code>CHECKER (BLUESKY)</code>.
+      <b>Raj:</b> one grant, <code>CHECKER (ACME, BOM, IMPORT, any mode)</code>. The system describes this in plain English
+      (<code>GET /auth/me</code>, <code>npm run access:describe</code>).</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">3</span>The preparer is also qualified to approve it?</div>
+    <div class="a"><span class="verdict">Qualification isn’t enough.</span> A separation-of-duties rule runs <i>after</i> the scope check: if you
+      prepared this job (per its history), you can’t check or reject it. Sarah can check ACME jobs, just not her own. Routing and
+      “waiting for me” apply the same rule, so she is never even offered it. The same idea stops an admin who checked or filed a job from
+      cancelling or reopening it.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">4</span>The person responsible is absent?</div>
+    <div class="a">An <b>absence</b> blocks work actions (viewing still works). Recording one immediately re-checks that person’s open
+      jobs and re-routes each to someone the engine says can do the next step. If nobody can, the job is left unassigned and flagged
+      in the automation log for a human to handle. Cover is explicit: a <b>delegation</b> lets Dev do Priya’s CORAL checking until a set date,
+      and history records “Dev, on behalf of Priya, under delegation X”. A delegation <i>lends scope, not qualification</i> (Dev must
+      already be a CHECKER). It reaches only what Priya holds <i>at the moment of use</i>, is capped at 30 days, and an admin can’t set up one they are part of.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">5</span>Jobs halfway through when responsibilities change?</div>
+    <div class="a"><b>Authority:</b> a revoke takes effect on the next request. Work already done stays valid, and its history still points to the
+      grant that allowed it at the time. <b>Assignments:</b> revoking a grant, ending a delegation or deactivating a user re-validates that
+      person’s open jobs and re-routes the ones they can no longer do. The job keeps its stage; only the next actor changes.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">6</span>Who can cancel a filed job or reopen a closed one?</div>
+    <div class="a">Filed jobs are <b>locked for everyone</b> by the stage check. Cancelling a filed job is a separate, more sensitive
+      permission (<code>job.cancel_filed</code>) from cancelling a draft. It and <code>job.reopen</code> belong only to OPS_ADMIN,
+      <b>scoped</b> (Olivia: DEL only), need a written reason, and are blocked for an admin who checked or filed that job. Each is recorded with
+      the reason and the grant used. <i>Assumption:</i> one in-scope admin plus a reason is enough. Two-person approval was left out as too heavy
+      day to day, but it would slot in as one more check.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">7</span>A client’s employee follows their shipments?</div>
+    <div class="a">A <code>CLIENT</code> user type with a <code>CLIENT_VIEWER</code> grant for their own client. Three safeguards: the role only has
+      <code>job.view</code>; the engine clamps client users to their own company even if a grant were misconfigured; and admins can only give
+      client users read-only roles for their own client. They see the status trail without internal names.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">8</span>An admin fixes a stuck job, or tries to gain power?</div>
+    <div class="a"><b>Fixing:</b> OPS_ADMIN can reassign with a reason, but only to someone the engine says can do the next step. They can’t do
+      the work for someone else or force a stage (there is no “set stage” endpoint).
+      <b>Escalation:</b> any access change where actor = target is refused (<code>SELF_ESCALATION</code>), privileged roles can’t be granted at all,
+      and changes outside the admin’s own scope are refused (Bharat is DEL-only). Every attempt, allowed or denied, is audited.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">9</span>The overnight parser?</div>
+    <div class="a"><span class="verdict">As a user, not a backdoor.</span> It is a <code>SERVICE</code> identity with no password, whose
+      SYSTEM_PARSER role allows only creating jobs and updating imported fields, and only before preparation. It goes through the same
+      services and engine as people, so a filed job rejects its update the same way. Re-runs are safe: records match on <code>externalRef</code>
+      and unchanged data writes nothing. It may not change client, branch, direction or mode, since that would silently move a job into other
+      people’s scope. Bad records are logged and skipped; the batch continues.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">10</span>“Why can she do this and he can’t?”</div>
+    <div class="a"><code>POST /authorization/check</code> with several user ids runs the engine for each and returns, side by side, the decision,
+      a sentence and the trace:
+      <div class="quote">Sarah: has CHECKER for client ACME … which covers this EXPORT AIR job for ACME at DEL.<br>
+      Raj: no CHECKER access covers this job. Closest: CHECKER for ACME, BOM, IMPORT; mismatch on branch (job is DEL), direction (job is EXPORT).</div>
+      The “closest grant” hint tells an admin exactly what to change.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">11</span>“Who could have changed this job on the 3rd?”</div>
+    <div class="a">It’s three questions. <b>Who did</b> comes from JobHistory. <b>Under what authority</b> comes from the grant or delegation id stored on
+      each history row. <b>Who could have</b> comes from <code>GET /jobs/:id/who-could-act?at=…</code>, which rebuilds the facts as they were at that
+      moment (the job’s stage from its history, grants and delegations by their validity and revoke dates, absences) and re-runs the same engine for every user.
+      Nothing is overwritten, so this works for any past time.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">12</span>A new kind of role next quarter, engineering busy?</div>
+    <div class="a"><b>Roles are data:</b> a new role is one row (name + permission list), granted through the normal scoped-grant API, with no code
+      change or deploy. Engineering is only needed for a genuinely new <i>verb</i> (permission) or workflow rule. An admin screen for
+      creating roles was cut for time; today it’s a one-line seed or SQL change.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">13</span>“Waiting for me” matches what I can actually do?</div>
+    <div class="a">It isn’t a stored task list that could go stale. It’s a query built from the same parts as the engine (my grants’ scopes for the
+      job’s next action, the separation-of-duties rule, assigned to me or unassigned), computed fresh on each request. A test walks every
+      user’s queue and confirms the engine says ALLOW for each item, so any drift fails the build.</div></div>
+
+  <div class="q"><div class="qt"><span class="badge">14</span>When the system is unsure?</div>
+    <div class="a"><span class="verdict">It says no, and says why.</span> Unknown actions, missing facts or any exception during evaluation become
+      <code>DENY / INDETERMINATE</code>. Routing that can’t find a safely eligible person leaves the job unassigned and flags it rather than guessing.
+      Ambiguous input (missing reason, bad dates, a parser record that would move scope) is rejected, not repaired.</div></div>
+
+  <div class="q added"><div class="qt"><span class="badge">+15</span>Two people act on the same job at once?</div>
+    <div class="a">Optimistic concurrency: exactly one wins, the other gets 409. A test fires two simultaneous checks and asserts there is one CHECK in history.</div></div>
+
+  <div class="q added"><div class="qt"><span class="badge">+16</span>How fast does a revoke hit someone already logged in?</div>
+    <div class="a">On their next request, because tokens hold identity only. A deactivated user’s token stops working at once.</div></div>
+
+  <div class="q added"><div class="qt"><span class="badge">+17</span>Can a client user learn other clients’ jobs exist?</div>
+    <div class="a">No. Out-of-scope jobs return 404 and lists are filtered in SQL.</div></div>
+
+</div>
+
+<!-- ================= 4. ASSUMPTIONS & CUTS ================= -->
+<h2><span class="num">4</span>Assumptions and what was cut</h2>
+
+<div class="twocol">
+  <div class="box">
+    <h4>Assumptions (where the brief is silent)</h4>
+    <ul>
+      <li>One NFPL organisation.</li>
+      <li>A job’s client, branch, direction and mode don’t change after creation.</li>
+      <li>“Reopen” returns a job to a stage where it can be prepared again.</li>
+      <li>A written reason of at least 3 characters is enough.</li>
+      <li>Absence cover is short (a delegation of 30 days at most); longer changes are new grants.</li>
+    </ul>
+  </div>
+  <div class="box cut">
+    <h4>Cut for time (not claimed as built)</h4>
+    <ul>
+      <li>Configurable automation rules and an event bus.</li>
+      <li>Overdue-job escalation and notifications (both depend on that rule engine).</li>
+      <li>An admin API/UI for creating roles; a parser HTTP endpoint; a UI.</li>
+      <li><b>Next, in order:</b> outbox + worker for routing → escalation of stale jobs → role-management API → a short-lived permission cache if request volume grows.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="foot">
+  <span>Gatekeeper · design document</span>
+  <span>Setup, sample users and the demo script: README.md · Tests: 65 (33 unit, 32 integration on a real PostgreSQL database)</span>
+</div>
+
+</body>
+</html>

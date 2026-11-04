@@ -1,0 +1,13 @@
+[
+  { "externalRef": "MAEU-24110401", "clientId": "ACME", "branchId": "BOM", "direction": "IMPORT", "mode": "FCL", "consignee": "Acme Pharma Warehouse", "weightKg": 12450.5, "valueInr": 4200000 },
+  { "externalRef": "AI-CARGO-77812", "clientId": "BLUESKY", "branchId": "BLR", "direction": "IMPORT", "mode": "AIR", "consignee": "Bluesky Electronics", "weightKg": 380, "valueInr": 9150000 },
+  { "externalRef": "MSC-55102", "clientId": "CORAL", "branchId": "MAA", "direction": "EXPORT", "mode": "LCL", "consignee": "Coral Textiles EU", "weightKg": 2100, "valueInr": 1875000 },
+  { "externalRef": "EXT-NF-DEMO-06", "clientId": "ACME", "branchId": "BOM", "direction": "IMPORT", "mode": "AIR", "consignee": "Kaveri Exports", "weightKg": 70.25, "valueInr": 1350000 },
+  { "externalRef": "EXT-NF-DEMO-04", "clientId": "ACME", "branchId": "BOM", "direction": "IMPORT", "mode": "LCL", "consignee": "Late correction", "weightKg": 999, "valueInr": 1 },
+  { "externalRef": "EXT-NF-DEMO-07", "clientId": "ACME", "branchId": "CCU", "direction": "EXPORT", "mode": "LCL", "consignee": "Jupiter Steel", "weightKg": 5000, "valueInr": 800000 },
+  { "externalRef": "BAD-WEIGHT-1", "clientId": "DELTA", "branchId": "DEL", "direction": "IMPORT", "mode": "FCL", "consignee": "Delta Foods", "weightKg": -40, "valueInr": 100 },
+  { "externalRef": "NO-CONSIGNEE-1", "clientId": "DELTA", "branchId": "DEL", "direction": "IMPORT", "mode": "FCL", "weightKg": 40, "valueInr": 100 },
+  { "externalRef": "UNKNOWN-CLIENT-1", "clientId": "WAYNE", "branchId": "DEL", "direction": "IMPORT", "mode": "AIR", "consignee": "Wayne Enterprises", "weightKg": 10, "valueInr": 100 },
+  "this line is not even an object",
+  { "externalRef": "MAEU-24110401", "clientId": "ACME", "branchId": "BOM", "direction": "IMPORT", "mode": "FCL", "consignee": "Acme Pharma Warehouse", "weightKg": 12450.5, "valueInr": 4200000 }
+]

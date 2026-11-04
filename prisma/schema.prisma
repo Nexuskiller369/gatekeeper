@@ -1,0 +1,271 @@
+// Gatekeeper data model.
+// Design rule: access facts (grants, delegations, absences) are never deleted, only ended
+// (revokedAt / validUntil / endsAt). That is what lets us answer "who could act at time T".
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Direction {
+  IMPORT
+  EXPORT
+}
+
+enum Mode {
+  AIR
+  FCL
+  LCL
+}
+
+enum Stage {
+  CONFIRMED
+  PREPARED
+  CHECKED
+  FILED
+  CANCELLED
+  REOPENED
+}
+
+enum UserType {
+  STAFF   // NFPL employee
+  CLIENT  // a client's own employee (read-only, own client only)
+  SERVICE // non-human identity, e.g. the overnight parser
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE // left the company / disabled. Absence is NOT a status: see Absence.
+}
+
+model Branch {
+  id   String @id // short code, e.g. "BOM"
+  name String
+
+  jobs        Job[]
+  grants      AccessGrant[]
+  delegations Delegation[]
+}
+
+model Client {
+  id   String @id // short code, e.g. "ACME"
+  name String
+
+  jobs        Job[]
+  users       User[]
+  grants      AccessGrant[]
+  delegations Delegation[]
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String? // null for SERVICE identities: they cannot log in over HTTP
+  type         UserType
+  clientId     String? // required when type = CLIENT
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  client            Client?       @relation(fields: [clientId], references: [id])
+  grants            AccessGrant[] @relation("GrantUser")
+  grantsGiven       AccessGrant[] @relation("GrantGrantedBy")
+  grantsRevoked     AccessGrant[] @relation("GrantRevokedBy")
+  delegationsGiven  Delegation[]  @relation("Delegator")
+  delegationsHeld   Delegation[]  @relation("Delegate")
+  delegationsMade   Delegation[]  @relation("DelegationCreatedBy")
+  absences          Absence[]     @relation("AbsenceUser")
+  absencesRecorded  Absence[]     @relation("AbsenceCreatedBy")
+  assignedJobs      Job[]         @relation("JobAssignee")
+  createdJobs       Job[]         @relation("JobCreatedBy")
+  historyActions    JobHistory[]  @relation("HistoryActor")
+  historyOnBehalfOf JobHistory[]  @relation("HistoryOnBehalfOf")
+  auditAsActor      AccessAuditLog[] @relation("AuditActor")
+  auditAsTarget     AccessAuditLog[] @relation("AuditTarget")
+}
+
+// A role is a named bundle of permissions. Roles live in the database (not in code),
+// so a new bundle can be introduced without a deploy. Permissions themselves are a fixed
+// catalogue in src/domain/permissions.ts because each one maps to code behaviour.
+model Role {
+  id           String   @id // e.g. "CHECKER"
+  name         String
+  description  String
+  permissions  String[]
+  isPrivileged Boolean  @default(false) // cannot be granted through the API
+
+  grants      AccessGrant[]
+  delegations Delegation[]
+}
+
+// "User U has role R for client C, branch B, direction D, mode M, from T1 until T2".
+// A NULL scope column means ANY.
+model AccessGrant {
+  id           String     @id @default(cuid())
+  userId       String
+  roleId       String
+  clientId     String?
+  branchId     String?
+  direction    Direction?
+  mode         Mode?
+  validFrom    DateTime   @default(now())
+  validUntil   DateTime?
+  reason       String
+  grantedById  String?
+  createdAt    DateTime   @default(now())
+  revokedAt    DateTime?
+  revokedById  String?
+  revokeReason String?
+
+  user      User    @relation("GrantUser", fields: [userId], references: [id])
+  role      Role    @relation(fields: [roleId], references: [id])
+  client    Client? @relation(fields: [clientId], references: [id])
+  branch    Branch? @relation(fields: [branchId], references: [id])
+  grantedBy User?   @relation("GrantGrantedBy", fields: [grantedById], references: [id])
+  revokedBy User?   @relation("GrantRevokedBy", fields: [revokedById], references: [id])
+
+  @@index([userId])
+  @@index([roleId, clientId, branchId])
+}
+
+// Temporary lending of a delegator's role scope to a delegate who is already qualified
+// for that role somewhere ("delegation lends scope, not qualification").
+model Delegation {
+  id          String     @id @default(cuid())
+  delegatorId String
+  delegateId  String
+  roleId      String
+  clientId    String?
+  branchId    String?
+  direction   Direction?
+  mode        Mode?
+  validFrom   DateTime
+  validUntil  DateTime // always time-boxed
+  reason      String
+  createdById String
+  createdAt   DateTime   @default(now())
+  revokedAt   DateTime?
+
+  delegator User    @relation("Delegator", fields: [delegatorId], references: [id])
+  delegate  User    @relation("Delegate", fields: [delegateId], references: [id])
+  createdBy User    @relation("DelegationCreatedBy", fields: [createdById], references: [id])
+  role      Role    @relation(fields: [roleId], references: [id])
+  client    Client? @relation(fields: [clientId], references: [id])
+  branch    Branch? @relation(fields: [branchId], references: [id])
+
+  @@index([delegateId])
+  @@index([delegatorId])
+}
+
+// Absence is a dated period, not a flag, so it can be scheduled ahead and reconstructed later.
+model Absence {
+  id          String    @id @default(cuid())
+  userId      String
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String
+  createdById String
+  createdAt   DateTime  @default(now())
+  cancelledAt DateTime?
+
+  user      User @relation("AbsenceUser", fields: [userId], references: [id])
+  createdBy User @relation("AbsenceCreatedBy", fields: [createdById], references: [id])
+
+  @@index([userId, startsAt])
+}
+
+model Job {
+  id             String    @id @default(cuid())
+  reference      String    @unique
+  externalRef    String?   @unique // key used by the overnight parser for idempotent updates
+  // These four attributes decide who may act; they are immutable after creation.
+  clientId       String
+  branchId       String
+  direction      Direction
+  mode           Mode
+  stage          Stage     @default(CONFIRMED)
+  stageEnteredAt DateTime  @default(now())
+  assigneeId     String?
+  version        Int       @default(0) // optimistic concurrency token
+  // Business data that can be "altered" (the incident). Editable only before filing.
+  consignee      String
+  weightKg       Decimal   @db.Decimal(12, 2)
+  valueInr       Decimal   @db.Decimal(14, 2)
+  notes          String?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  client    Client       @relation(fields: [clientId], references: [id])
+  branch    Branch       @relation(fields: [branchId], references: [id])
+  assignee  User?        @relation("JobAssignee", fields: [assigneeId], references: [id])
+  createdBy User         @relation("JobCreatedBy", fields: [createdById], references: [id])
+  history   JobHistory[]
+
+  // Work queues always filter on stage first, then scope columns.
+  @@index([stage, clientId, branchId, direction, mode])
+  @@index([assigneeId, stage])
+  @@index([clientId, createdAt])
+}
+
+// Append-only record of everything that happened to a job, including WHICH grant allowed it.
+model JobHistory {
+  id           String   @id @default(cuid())
+  jobId        String
+  actorId      String
+  onBehalfOfId String? // set when the action was performed under a delegation
+  via          String // DIRECT | DELEGATION | AUTOMATION
+  action       String // CREATE, PREPARE, CHECK, REJECT, FILE, CANCEL, REOPEN, EDIT, IMPORT_UPDATE, ASSIGN, ROUTING_FAILED
+  fromStage    Stage?
+  toStage      Stage?
+  reason       String?
+  grantId      String? // the AccessGrant that authorised this action
+  delegationId String?
+  changes      Json?
+  createdAt    DateTime @default(now())
+
+  job        Job   @relation(fields: [jobId], references: [id])
+  actor      User  @relation("HistoryActor", fields: [actorId], references: [id])
+  onBehalfOf User? @relation("HistoryOnBehalfOf", fields: [onBehalfOfId], references: [id])
+
+  @@index([jobId, createdAt])
+  @@index([jobId, action, actorId]) // separation-of-duties lookups
+}
+
+// Append-only record of every access-management action, including DENIED attempts.
+model AccessAuditLog {
+  id           String   @id @default(cuid())
+  actorId      String
+  targetUserId String?
+  action       String // GRANT, REVOKE, DELEGATE, ABSENCE, STATUS
+  outcome      String // ALLOWED | DENIED
+  code         String? // denial code, e.g. SELF_ESCALATION
+  details      Json?
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  actor  User  @relation("AuditActor", fields: [actorId], references: [id])
+  target User? @relation("AuditTarget", fields: [targetUserId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([targetUserId, createdAt])
+}
+
+// What automation (routing, absence reassignment, parser) did and whether it succeeded.
+model AutomationLog {
+  id        String   @id @default(cuid())
+  rule      String // ROUTING | ABSENCE_REASSIGN | PARSER
+  jobId     String?
+  action    String
+  outcome   String // SUCCESS | FAILED | SKIPPED
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([rule, createdAt])
+  @@index([jobId])
+}

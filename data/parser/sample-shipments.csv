@@ -1,0 +1,4 @@
+externalRef,clientId,branchId,direction,mode,consignee,weightKg,valueInr
+CSV-HLCU-9001,GLOBEX,DEL,EXPORT,FCL,Globex Europe GmbH,8800,3100000
+CSV-HLCU-9002,HORIZON,BOM,IMPORT,AIR,Horizon Retail,150,640000
+CSV-BAD-9003,HORIZON,BOM,SIDEWAYS,AIR,Horizon Retail,150,640000
